@@ -7,3 +7,4 @@ class Config:
 
     # матч по умолчанию (сек)
     DEFAULT_MATCH_SECONDS = int(os.environ.get("MATCH_SECONDS", "600"))  # 10 минут
+    ELO_K = int(os.environ.get("ELO_K", "32"))

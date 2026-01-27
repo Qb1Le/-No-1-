@@ -3,31 +3,38 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-class Lobby(db.Model):
-    __tablename__ = "lobbies"
+class AuthUser(db.Model):
+    __tablename__ = "auth_user"
 
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(12), unique=True, nullable=False)  # для закрытых
-    is_private = db.Column(db.Boolean, default=False, nullable=False)
+    username = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    rating = db.Column(db.Integer, nullable=False, default=1000)
 
-    host_name = db.Column(db.String(32), nullable=False)
-    guest_name = db.Column(db.String(32), nullable=True)
-
-    status = db.Column(db.String(16), nullable=False, default="open")  # open|full|started|closed
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+
 
 class Match(db.Model):
     __tablename__ = "matches"
 
     id = db.Column(db.Integer, primary_key=True)
-    lobby_id = db.Column(db.Integer, db.ForeignKey("lobbies.id"), nullable=False)
 
-    host_name = db.Column(db.String(32), nullable=False)
-    guest_name = db.Column(db.String(32), nullable=False)
+    player1_id = db.Column(db.Integer, db.ForeignKey("auth_user.id"), nullable=False)
+    player2_id = db.Column(db.Integer, db.ForeignKey("auth_user.id"), nullable=False)
+
+    player1_name = db.Column(db.String(32), nullable=False)
+    player2_name = db.Column(db.String(32), nullable=False)
+
+    # Снимок рейтингов на старте (для прозрачности)
+    player1_rating = db.Column(db.Integer, nullable=False)
+    player2_rating = db.Column(db.Integer, nullable=False)
 
     duration_sec = db.Column(db.Integer, nullable=False)
-    started_at = db.Column(db.DateTime, nullable=False)
+    started_at = db.Column(db.DateTime, nullable=True)
     ended_at = db.Column(db.DateTime, nullable=True)
 
-    winner = db.Column(db.String(32), nullable=True)  # имя победителя или None
-    reason = db.Column(db.String(32), nullable=True)  # "time", "surrender", ...
+    winner_user_id = db.Column(db.Integer, nullable=True)  # null = ничья/время
+    reason = db.Column(db.String(32), nullable=True)       # solve/time/surrender/disconnect
+
+    status = db.Column(db.String(16), nullable=False, default="pending")  # pending|started|ended

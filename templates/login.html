@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title">Вход</h5>
+
+        {% if error %}
+          <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" class="vstack gap-2">
+          <input class="form-control" name="username" placeholder="Логин" maxlength="32" required>
+          <input class="form-control" name="password" placeholder="Пароль" type="password" required>
+          <button class="btn btn-primary">Войти</button>
+        </form>
+
+        <div class="mt-3 small text-muted">
+          Нет аккаунта? <a href="/register">Регистрация</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

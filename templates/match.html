@@ -7,13 +7,13 @@
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <div class="text-muted small">Матч · Лобби #{{ lobby.id }}</div>
+            <div class="text-muted small">Матч #{{ match.id }}</div>
             <div class="fs-5 fw-semibold">
-              <span id="p1">{{ lobby.host_name }}</span>
-              <span class="text-muted">vs</span>
-              <span id="p2">{{ lobby.guest_name }}</span>
+              {{ me_name }} <span class="text-muted">vs</span>
+              {{ opponent_name }} <span class="text-muted small">({{ opponent_rating }})</span>
             </div>
           </div>
+
           <div class="text-end">
             <div class="text-muted small">⏱️ Осталось</div>
             <div id="timer" class="fs-3 fw-bold">--:--</div>
@@ -22,18 +22,17 @@
 
         <hr>
 
-        <!-- Заглушка под "задачу": позже подставишь настоящую -->
         <div class="alert alert-info mb-3">
           <div class="fw-semibold">Задача (демо)</div>
           <div class="small">
-            Нажми “Я решил”, чтобы завершить матч. Реальные задачи/проверку добавим позже.
+            Сейчас это демо. Нажми «Я решил», чтобы завершить матч. Позже добавим задачи ЕГЭ и проверку.
           </div>
         </div>
 
         <div class="d-flex gap-2">
           <button id="btnSolved" class="btn btn-success">✅ Я решил</button>
           <button id="btnSurrender" class="btn btn-outline-danger">🏳️ Сдаться</button>
-          <a class="btn btn-outline-secondary" href="/">Выйти</a>
+          <a class="btn btn-outline-secondary" href="/">На главную</a>
         </div>
 
         <div id="result" class="mt-3"></div>
@@ -51,19 +50,16 @@
   </div>
 </div>
 
-<div id="toastHost" class="toast-container position-fixed top-0 end-0 p-3"></div>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
   window.PAGE = {
     kind: "match",
-    lobbyId: {{ lobby.id }},
-    name: {{ name | tojson }},
-    matchSeconds: {{ match_seconds }},
-    hostName: {{ lobby.host_name | tojson }},
-    guestName: {{ lobby.guest_name | tojson }}
+    matchId: {{ match.id }},
+    meName: {{ me_name | tojson }},
+    p1Id: {{ match.player1_id }},
+    p2Id: {{ match.player2_id }},
   };
 </script>
 {% endblock %}
