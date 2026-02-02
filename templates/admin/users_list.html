@@ -2,23 +2,28 @@
 
 {% block content %}
 <div class="container mt-4">
-  <div class="d-flex align-items-center justify-content-between">
-    <h2 class="mb-0">Пользователи</h2>
-    <a class="btn btn-outline-secondary" href="/admin">← Админка</a>
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Пользователи</h2>
+    <a href="{{ url_for('admin_index') }}" class="btn btn-outline-secondary">
+      ← Админка
+    </a>
   </div>
 
-  <div class="table-responsive mt-3">
-    <table class="table table-striped align-middle">
-      <thead>
+  {% if users %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle">
+      <thead class="table-light">
         <tr>
-          <th style="width: 70px;">ID</th>
+          <th>ID</th>
           <th>Логин</th>
-          <th style="width: 120px;">Рейтинг</th>
-          <th style="width: 110px;">Матчей</th>
-          <th style="width: 110px;">Побед</th>
-          <th style="width: 110px;">Пораж.</th>
-          <th style="width: 110px;">Ничьих</th>
-          <th style="width: 110px;">Админ</th>
+          <th>Рейтинг (Elo)</th>
+          <th>Матчи</th>
+          <th>Победы</th>
+          <th>Поражения</th>
+          <th>Ничьи</th>
+          <th>Роль</th>
+          <th>Действия</th>
         </tr>
       </thead>
       <tbody>
@@ -26,27 +31,48 @@
         {% set s = stats.get(u.id, {}) %}
         <tr>
           <td>{{ u.id }}</td>
-          <td class="fw-semibold">{{ u.username }}</td>
-          <td>{{ u.rating }}</td>
-          <td>{{ s.get('ended', 0) }}</td>
-          <td>{{ s.get('wins', 0) }}</td>
-          <td>{{ s.get('losses', 0) }}</td>
-          <td>{{ s.get('draws', 0) }}</td>
           <td>
-            {% if u.is_admin %}
-              <span class="badge text-bg-success">да</span>
-            {% else %}
-              <span class="badge text-bg-secondary">нет</span>
+            <strong>{{ u.username }}</strong>
+            {% if u.id == session.get("user_id") %}
+              <span class="badge bg-info ms-1">вы</span>
             {% endif %}
           </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="8" class="text-muted">Пользователей пока нет.</td>
+          <td>{{ u.rating }}</td>
+          <td>{{ s.get("ended", 0) }}</td>
+          <td class="text-success">{{ s.get("wins", 0) }}</td>
+          <td class="text-danger">{{ s.get("losses", 0) }}</td>
+          <td class="text-secondary">{{ s.get("draws", 0) }}</td>
+          <td>
+            {% if u.is_admin %}
+              <span class="badge bg-warning text-dark">Админ</span>
+            {% else %}
+              <span class="badge bg-secondary">Пользователь</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.id != session.get("user_id") %}
+            <form method="post"
+                  action="{{ url_for('admin_user_delete', user_id=u.id) }}"
+                  onsubmit="return confirm('Удалить пользователя {{ u.username }}? Это действие необратимо.')"
+                  style="display:inline">
+              <button class="btn btn-sm btn-outline-danger">
+                🗑 Удалить
+              </button>
+            </form>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {% else %}
+    <div class="alert alert-info">
+      Пользователей пока нет.
+    </div>
+  {% endif %}
+
 </div>
 {% endblock %}

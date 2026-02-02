@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h3 class="mb-0" id="taskTitle">Тренировка</h3>
+      <div class="text-muted small" id="stats">Решено: 0 / 0</div>
+    </div>
+
+    <div class="text-end">
+      <div class="badge text-bg-secondary fs-6">
+        ⏱ <span id="timer">00:00</span>
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-outline-secondary btn-sm" id="btnStop">Остановить</button>
+        <a class="btn btn-outline-secondary btn-sm" href="/">На главную</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label mb-1">Предмет</label>
+          <select class="form-select" id="selSubject"></select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label mb-1">Тема</label>
+          <select class="form-select" id="selTopic"></select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label mb-1">Сложность</label>
+          <select class="form-select" id="selDifficulty"></select>
+        </div>
+      </div>
+      <div class="form-text mt-2">
+        Фильтры применяются сразу после изменения.
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <pre id="taskPrompt" class="mb-0" style="white-space: pre-wrap;"></pre>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <label class="form-label">Твой ответ</label>
+      <div class="d-flex gap-2">
+        <input id="answerInput" class="form-control" placeholder="Введите ответ">
+        <button id="btnSubmit" class="btn btn-primary">Ответить</button>
+      </div>
+      <div class="form-text">Enter тоже отправляет ответ.</div>
+    </div>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.PAGE = { kind: "training" };
+</script>
+{% endblock %}

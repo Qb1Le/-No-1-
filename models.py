@@ -55,6 +55,7 @@ class Task(db.Model):
 
     topic = db.Column(db.String(64), nullable=False, default="Общее")
     difficulty = db.Column(db.String(64), nullable=False, default="Средняя")
+    subject = db.Column(db.String(64), nullable=False, default="Математика")
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 

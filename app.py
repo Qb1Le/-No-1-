@@ -5,7 +5,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
+
 from sqlalchemy import func
 from flask import (
     Flask,
@@ -41,11 +42,22 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 DIFFICULTIES = ("Легкая", "Средняя", "Сложная")
 DEFAULT_DIFFICULTY = "Средняя"
 DEFAULT_TOPIC = "Общее"
+DEFAULT_SUBJECT = "Математика"
 
 
 def normalize_difficulty(val: str) -> str:
     v = (val or "").strip()
     return v if v in DIFFICULTIES else DEFAULT_DIFFICULTY
+
+
+def normalize_subject(val: str) -> str:
+    v = (val or "").strip()
+    return v if v else DEFAULT_SUBJECT
+
+
+def normalize_topic(val: str) -> str:
+    v = (val or "").strip()
+    return v if v else DEFAULT_TOPIC
 
 
 # ----------------------------
@@ -138,6 +150,26 @@ def find_best_opponent(entry: QueueEntry) -> Optional[QueueEntry]:
 
 
 # ----------------------------
+# Training (in-memory)
+# ----------------------------
+LIVE_TRAININGS: Dict[int, Dict] = {}
+
+
+def training_room(user_id: int) -> str:
+    return f"training:{user_id}"
+
+
+def training_seconds_default() -> int:
+    # можно добавить DEFAULT_TRAINING_SECONDS в Config
+    return int(app.config.get("DEFAULT_TRAINING_SECONDS", 60))
+
+
+def normalize_filter_value(val: str, any_value: str) -> str:
+    v = (val or "").strip()
+    return v if v else any_value
+
+
+# ----------------------------
 # Tasks logic (server-side)
 # ----------------------------
 def normalize_answer(s: str) -> str:
@@ -158,6 +190,7 @@ def pick_task() -> Dict[str, str]:
     if not t:
         return {
             "id": None,
+            "subject": DEFAULT_SUBJECT,
             "topic": "Демо-задача",
             "prompt": "Сколько будет 17 + 25 ? (введите число)",
             "answer": "42",
@@ -167,11 +200,73 @@ def pick_task() -> Dict[str, str]:
 
     return {
         "id": t.id,
+        "subject": getattr(t, "subject", DEFAULT_SUBJECT),
         "topic": t.topic,
         "prompt": t.prompt,
         "answer": t.answer,
         "kind": t.kind,
         "difficulty": t.difficulty,
+    }
+
+
+def pick_task_filtered(subject: str, topic: str, difficulty: str) -> Dict[str, str]:
+    """
+    subject/topic/difficulty могут быть 'Любой/Любая'.
+    """
+    q = Task.query.filter_by(is_active=True)
+
+    if subject and subject != "Любой":
+        # если поля subject нет в модели/БД — здесь упадёт; это ожидаемо (нужно добавить колонку)
+        q = q.filter(Task.subject == subject)
+
+    if topic and topic != "Любая":
+        q = q.filter(Task.topic == topic)
+
+    if difficulty and difficulty != "Любая":
+        q = q.filter(Task.difficulty == difficulty)
+
+    t = q.order_by(func.random()).first()
+    if not t:
+        return {
+            "id": None,
+            "subject": subject if subject != "Любой" else DEFAULT_SUBJECT,
+            "topic": topic if topic != "Любая" else "Нет задач",
+            "prompt": "Нет задач под выбранные фильтры. Убери фильтры или добавь задачи в админке.",
+            "answer": "",
+            "kind": "text",
+            "difficulty": difficulty if difficulty != "Любая" else DEFAULT_DIFFICULTY,
+        }
+
+    return {
+        "id": t.id,
+        "subject": getattr(t, "subject", DEFAULT_SUBJECT),
+        "topic": t.topic,
+        "prompt": t.prompt,
+        "answer": t.answer,
+        "kind": t.kind,
+        "difficulty": t.difficulty,
+    }
+
+
+def training_options() -> Dict:
+    """
+    Возвращаем списки для селектов тренировки.
+    """
+    # subjects
+    try:
+        subjects_rows = db.session.query(Task.subject).distinct().order_by(Task.subject).all()
+        subjects = [r[0] for r in subjects_rows if r and r[0]]
+    except Exception:
+        # если subject ещё не добавили
+        subjects = [DEFAULT_SUBJECT]
+
+    topics_rows = db.session.query(Task.topic).distinct().order_by(Task.topic).all()
+    topics = [r[0] for r in topics_rows if r and r[0]]
+
+    return {
+        "subjects": ["Любой"] + subjects,
+        "topics": ["Любая"] + topics,
+        "difficulties": ["Любая", "Легкая", "Средняя", "Сложная"],
     }
 
 
@@ -219,6 +314,12 @@ def match_page(match_id: int):
     )
 
 
+@app.route("/training", methods=["GET"])
+@login_required
+def training_page():
+    return render_template("training.html", training_seconds=training_seconds_default())
+
+
 # ----------------------------
 # HTTP routes: auth
 # ----------------------------
@@ -246,7 +347,6 @@ def register():
         username=username,
         password_hash=generate_password_hash(password),
         rating=1000,
-        # is_admin по умолчанию False (если поле есть в модели)
     )
     db.session.add(user)
     db.session.commit()
@@ -327,23 +427,21 @@ def admin_tasks():
 @admin_required
 def admin_task_new():
     if request.method == "GET":
-        return render_template(
-            "admin/task_form.html",
-            task=None,
-            error=None,
-        )
+        return render_template("admin/task_form.html", task=None, error=None)
 
-    topic = (request.form.get("topic") or "").strip()
+    subject = normalize_subject(request.form.get("subject") or DEFAULT_SUBJECT)
+    topic = normalize_topic(request.form.get("topic") or DEFAULT_TOPIC)
     prompt = (request.form.get("prompt") or "").strip()
     answer = (request.form.get("answer") or "").strip()
     kind = (request.form.get("kind") or "text").strip()
     is_active = bool(request.form.get("is_active"))
     difficulty = normalize_difficulty(request.form.get("difficulty") or DEFAULT_DIFFICULTY)
 
-    if not topic or not prompt or not answer:
-        return render_template("admin/task_form.html", task=None, error="Заполни topic / prompt / answer")
+    if not prompt or not answer:
+        return render_template("admin/task_form.html", task=None, error="Заполни prompt / answer")
 
     t = Task(
+        subject=subject,
         topic=topic,
         prompt=prompt,
         answer=answer,
@@ -366,15 +464,16 @@ def admin_task_edit(task_id: int):
     if request.method == "GET":
         return render_template("admin/task_form.html", task=t, error=None)
 
-    t.topic = (request.form.get("topic") or "").strip()
+    t.subject = normalize_subject(request.form.get("subject") or getattr(t, "subject", DEFAULT_SUBJECT))
+    t.topic = normalize_topic(request.form.get("topic") or t.topic)
     t.prompt = (request.form.get("prompt") or "").strip()
     t.answer = (request.form.get("answer") or "").strip()
     t.kind = (request.form.get("kind") or "text").strip()
     t.is_active = bool(request.form.get("is_active"))
     t.difficulty = normalize_difficulty(request.form.get("difficulty") or DEFAULT_DIFFICULTY)
 
-    if not t.topic or not t.prompt or not t.answer:
-        return render_template("admin/task_form.html", task=t, error="Заполни topic / prompt / answer")
+    if not t.prompt or not t.answer:
+        return render_template("admin/task_form.html", task=t, error="Заполни prompt / answer")
 
     db.session.commit()
     return redirect(url_for("admin_tasks"))
@@ -406,18 +505,20 @@ def admin_task_delete(task_id: int):
 @admin_required
 def admin_tasks_export_json():
     tasks = Task.query.order_by(Task.id.asc()).all()
-    data = [
-        {
-            "id": t.id,
-            "topic": t.topic,
-            "prompt": t.prompt,
-            "answer": t.answer,
-            "kind": t.kind,
-            "difficulty": t.difficulty,
-            "is_active": t.is_active,
-        }
-        for t in tasks
-    ]
+    data = []
+    for t in tasks:
+        data.append(
+            {
+                "id": t.id,
+                "subject": getattr(t, "subject", DEFAULT_SUBJECT),
+                "topic": t.topic,
+                "prompt": t.prompt,
+                "answer": t.answer,
+                "kind": t.kind,
+                "difficulty": t.difficulty,
+                "is_active": t.is_active,
+            }
+        )
     return Response(
         json.dumps(data, ensure_ascii=False, indent=2),
         mimetype="application/json",
@@ -430,9 +531,20 @@ def admin_tasks_export_json():
 def admin_tasks_export_csv():
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(["id", "topic", "prompt", "answer", "kind", "difficulty", "is_active"])
+    w.writerow(["id", "subject", "topic", "prompt", "answer", "kind", "difficulty", "is_active"])
     for t in Task.query.order_by(Task.id.asc()).all():
-        w.writerow([t.id, t.topic, t.prompt, t.answer, t.kind, t.difficulty, int(t.is_active)])
+        w.writerow(
+            [
+                t.id,
+                getattr(t, "subject", DEFAULT_SUBJECT),
+                t.topic,
+                t.prompt,
+                t.answer,
+                t.kind,
+                t.difficulty,
+                int(t.is_active),
+            ]
+        )
 
     return Response(
         out.getvalue(),
@@ -467,18 +579,20 @@ def admin_tasks_import():
                 continue
 
             t_id = it.get("id")
-            topic = (it.get("topic") or "").strip()
+            subject = normalize_subject(it.get("subject") or DEFAULT_SUBJECT)
+            topic = normalize_topic(it.get("topic") or DEFAULT_TOPIC)
             prompt = (it.get("prompt") or "").strip()
             answer = (it.get("answer") or "").strip()
             kind = (it.get("kind") or "text").strip()
             difficulty = normalize_difficulty(it.get("difficulty") or DEFAULT_DIFFICULTY)
             is_active = bool(it.get("is_active", True))
 
-            if not topic or not prompt or not answer:
+            if not prompt or not answer:
                 continue
 
             t = db.session.get(Task, int(t_id)) if t_id else None
             if t:
+                t.subject = subject
                 t.topic = topic
                 t.prompt = prompt
                 t.answer = answer
@@ -489,6 +603,7 @@ def admin_tasks_import():
             else:
                 db.session.add(
                     Task(
+                        subject=subject,
                         topic=topic,
                         prompt=prompt,
                         answer=answer,
@@ -504,18 +619,20 @@ def admin_tasks_import():
         reader = csv.DictReader(io.StringIO(text))
         for row in reader:
             t_id = (row.get("id") or "").strip()
-            topic = (row.get("topic") or "").strip()
+            subject = normalize_subject(row.get("subject") or DEFAULT_SUBJECT)
+            topic = normalize_topic(row.get("topic") or DEFAULT_TOPIC)
             prompt = (row.get("prompt") or "").strip()
             answer = (row.get("answer") or "").strip()
             kind = (row.get("kind") or "text").strip()
             difficulty = normalize_difficulty(row.get("difficulty") or DEFAULT_DIFFICULTY)
             is_active = (row.get("is_active") or "1").strip() in ("1", "true", "True", "yes", "YES")
 
-            if not topic or not prompt or not answer:
+            if not prompt or not answer:
                 continue
 
             t = db.session.get(Task, int(t_id)) if t_id.isdigit() else None
             if t:
+                t.subject = subject
                 t.topic = topic
                 t.prompt = prompt
                 t.answer = answer
@@ -526,6 +643,7 @@ def admin_tasks_import():
             else:
                 db.session.add(
                     Task(
+                        subject=subject,
                         topic=topic,
                         prompt=prompt,
                         answer=answer,
@@ -540,6 +658,28 @@ def admin_tasks_import():
 
     db.session.commit()
     return redirect(url_for("admin_tasks"))
+
+
+@app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+@admin_required
+def admin_user_delete(user_id: int):
+    user = db.session.get(AuthUser, user_id)
+    if not user:
+        abort(404)
+
+    # Защита от удаления самого себя
+    if user.id == session.get("user_id"):
+        abort(400, "Нельзя удалить самого себя")
+
+    # Удаляем связанные матчи
+    Match.query.filter((Match.player1_id == user.id) | (Match.player2_id == user.id)).delete(
+        synchronize_session=False
+    )
+
+    db.session.delete(user)
+    db.session.commit()
+
+    return redirect(url_for("admin_users"))
 
 
 # ----------------------------
@@ -592,7 +732,7 @@ def on_queue_join(_data):
             "seconds_left": m.duration_sec,
             "running": False,
             "task": pick_task(),  # сервер-only хранит answer
-            "submissions": {},  # user_id -> {answer, ts, first_ts, first_correct_ts}
+            "submissions": {},
         }
 
         emit(
@@ -617,6 +757,225 @@ def on_queue_leave(_data):
     if uid:
         remove_from_queue_by_user(uid)
     emit("queue:status", {"status": "idle"})
+
+
+# ----------------------------
+# Socket.IO: training
+# ----------------------------
+@socketio.on("training:join")
+def on_training_join(_data=None):
+    uid, uname = ensure_user()
+    if not uid:
+        emit("toast", {"type": "danger", "text": "Нужно войти."})
+        return
+
+    room = training_room(uid)
+    join_room(room)
+
+    secs = training_seconds_default()
+
+    state = LIVE_TRAININGS.get(uid)
+    if not state:
+        # дефолтные фильтры
+        filters = {"subject": "Любой", "topic": "Любая", "difficulty": "Любая"}
+
+        task = pick_task_filtered(filters["subject"], filters["topic"], filters["difficulty"])
+        state = {
+            "user_id": uid,
+            "username": uname,
+            "room": room,
+            "sid": request.sid,
+            "running": True,
+            "seconds_left": secs,
+            "task": task,
+            "stats": {"total": 0, "solved": 0},
+            "filters": filters,
+            "generation": 0,  # защита от дубля таймеров
+        }
+        LIVE_TRAININGS[uid] = state
+    else:
+        state["sid"] = request.sid
+        state["room"] = room
+        state["running"] = True
+        if not state.get("filters"):
+            state["filters"] = {"subject": "Любой", "topic": "Любая", "difficulty": "Любая"}
+        if not state.get("task"):
+            f = state["filters"]
+            state["task"] = pick_task_filtered(f["subject"], f["topic"], f["difficulty"])
+        if not state.get("seconds_left"):
+            state["seconds_left"] = secs
+
+    # options для селектов
+    emit("training:options", training_options(), to=room)
+
+    # отдадим текущую задачу
+    task = state["task"]
+    emit(
+        "training:task",
+        {
+            "subject": task.get("subject", DEFAULT_SUBJECT),
+            "topic": task.get("topic", DEFAULT_TOPIC),
+            "difficulty": task.get("difficulty", DEFAULT_DIFFICULTY),
+            "prompt": task.get("prompt", ""),
+            "seconds_left": int(state["seconds_left"]),
+            "stats": state["stats"],
+            "filters": state["filters"],
+        },
+        to=room,
+    )
+
+    # старт/рестарт таймера (одно поколение на задачу)
+    state["generation"] += 1
+    gen = state["generation"]
+    socketio.start_background_task(training_timer_task, uid, gen)
+
+
+@socketio.on("training:set_filters")
+def on_training_set_filters(data):
+    uid, _ = ensure_user()
+    if not uid:
+        return
+
+    state = LIVE_TRAININGS.get(uid)
+    if not state:
+        return
+
+    subject = normalize_filter_value((data or {}).get("subject"), "Любой")
+    topic = normalize_filter_value((data or {}).get("topic"), "Любая")
+    difficulty = normalize_filter_value((data or {}).get("difficulty"), "Любая")
+
+    # нормализуем difficulty под нашу БД
+    if difficulty not in ("Любая",) + DIFFICULTIES:
+        difficulty = "Любая"
+
+    state["filters"] = {"subject": subject, "topic": topic, "difficulty": difficulty}
+    training_next_task(uid)
+
+
+def training_timer_task(user_id: int, generation: int):
+    with app.app_context():
+        while True:
+            state = LIVE_TRAININGS.get(user_id)
+            if not state:
+                return
+            if state.get("generation") != generation:
+                return
+            if not state.get("running"):
+                return
+
+            if state["seconds_left"] <= 0:
+                # таймаут
+                task = state["task"]
+                correct = task.get("answer", "")
+                socketio.emit(
+                    "training:result",
+                    {
+                        "correct": False,
+                        "reason": "timeout",
+                        "correct_answer": correct,
+                        "stats": state["stats"],
+                    },
+                    to=state["room"],
+                )
+                socketio.sleep(1)
+                training_next_task(user_id, generation)
+                return
+
+            socketio.sleep(1)
+            state["seconds_left"] -= 1
+            socketio.emit(
+                "training:tick",
+                {"seconds_left": int(state["seconds_left"])},
+                to=state["room"],
+            )
+
+
+def training_next_task(user_id: int, generation: Optional[int] = None):
+    state = LIVE_TRAININGS.get(user_id)
+    if not state:
+        return
+    if generation is not None and state.get("generation") != generation:
+        return
+
+    secs = training_seconds_default()
+    f = state.get("filters") or {"subject": "Любой", "topic": "Любая", "difficulty": "Любая"}
+
+    state["task"] = pick_task_filtered(f["subject"], f["topic"], f["difficulty"])
+    state["seconds_left"] = secs
+    state["running"] = True
+
+    task = state["task"]
+    socketio.emit(
+        "training:task",
+        {
+            "subject": task.get("subject", DEFAULT_SUBJECT),
+            "topic": task.get("topic", DEFAULT_TOPIC),
+            "difficulty": task.get("difficulty", DEFAULT_DIFFICULTY),
+            "prompt": task.get("prompt", ""),
+            "seconds_left": int(state["seconds_left"]),
+            "stats": state["stats"],
+            "filters": f,
+        },
+        to=state["room"],
+    )
+
+    # рестарт таймера
+    state["generation"] += 1
+    gen = state["generation"]
+    socketio.start_background_task(training_timer_task, user_id, gen)
+
+
+@socketio.on("training:submit_answer")
+def on_training_submit_answer(data):
+    uid, _ = ensure_user()
+    if not uid:
+        return
+
+    state = LIVE_TRAININGS.get(uid)
+    if not state or not state.get("running"):
+        return
+
+    ans = ((data or {}).get("answer") or "").strip()
+    if not ans:
+        emit("toast", {"type": "warning", "text": "Введи ответ."})
+        return
+
+    task = state["task"]
+    correct = task.get("answer", "")
+
+    # не считаем попытку, если демо/нет ответа
+    if correct:
+        state["stats"]["total"] += 1
+        ok = is_correct(ans, correct)
+        if ok:
+            state["stats"]["solved"] += 1
+    else:
+        ok = False
+
+    socketio.emit(
+        "training:result",
+        {
+            "correct": ok,
+            "reason": "answer",
+            "correct_answer": correct if correct else "—",
+            "stats": state["stats"],
+        },
+        to=state["room"],
+    )
+
+    socketio.sleep(1)
+    training_next_task(uid)
+
+
+@socketio.on("training:leave")
+def on_training_leave(_data=None):
+    uid, _ = ensure_user()
+    if not uid:
+        return
+    state = LIVE_TRAININGS.get(uid)
+    if state:
+        state["running"] = False
+    emit("toast", {"type": "secondary", "text": "Тренировка остановлена."})
 
 
 # ----------------------------
@@ -851,28 +1210,26 @@ def finish_match(match_id: int, winner_user_id: Optional[int] = None, reason: st
 
     db.session.commit()
 
-    # Итог (без раскрытия правильного ответа)
     task = state["task"]
     correct = task["answer"]
     sub1 = state["submissions"].get(m.player1_id)
     sub2 = state["submissions"].get(m.player2_id)
 
     payload = {
-    "winner_user_id": winner_user_id,
-    "reason": reason,
-    "p1_id": m.player1_id,
-    "p2_id": m.player2_id,
-    "p1_name": m.player1_name,
-    "p2_name": m.player2_name,
-    "correct_answer": correct,
-    "p1_answer": sub1["answer"] if sub1 else None,
-    "p2_answer": sub2["answer"] if sub2 else None,
-    "p1_correct": is_correct(sub1["answer"], correct) if sub1 else False,
-    "p2_correct": is_correct(sub2["answer"], correct) if sub2 else False,
+        "winner_user_id": winner_user_id,
+        "reason": reason,
+        "p1_id": m.player1_id,
+        "p2_id": m.player2_id,
+        "p1_name": m.player1_name,
+        "p2_name": m.player2_name,
+        "correct_answer": correct,
+        "p1_answer": sub1["answer"] if sub1 else None,
+        "p2_answer": sub2["answer"] if sub2 else None,
+        "p1_correct": is_correct(sub1["answer"], correct) if sub1 else False,
+        "p2_correct": is_correct(sub2["answer"], correct) if sub2 else False,
     }
 
     socketio.emit("match:ended", payload, to=match_room(match_id))
-
     LIVE_MATCHES.pop(match_id, None)
 
 
