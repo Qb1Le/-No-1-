@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between">
+    <h2 class="mb-0">Пользователи</h2>
+    <a class="btn btn-outline-secondary" href="/admin">← Админка</a>
+  </div>
+
+  <div class="table-responsive mt-3">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th style="width: 70px;">ID</th>
+          <th>Логин</th>
+          <th style="width: 120px;">Рейтинг</th>
+          <th style="width: 110px;">Матчей</th>
+          <th style="width: 110px;">Побед</th>
+          <th style="width: 110px;">Пораж.</th>
+          <th style="width: 110px;">Ничьих</th>
+          <th style="width: 110px;">Админ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        {% set s = stats.get(u.id, {}) %}
+        <tr>
+          <td>{{ u.id }}</td>
+          <td class="fw-semibold">{{ u.username }}</td>
+          <td>{{ u.rating }}</td>
+          <td>{{ s.get('ended', 0) }}</td>
+          <td>{{ s.get('wins', 0) }}</td>
+          <td>{{ s.get('losses', 0) }}</td>
+          <td>{{ s.get('draws', 0) }}</td>
+          <td>
+            {% if u.is_admin %}
+              <span class="badge text-bg-success">да</span>
+            {% else %}
+              <span class="badge text-bg-secondary">нет</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="text-muted">Пользователей пока нет.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

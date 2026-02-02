@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between">
+    <h2 class="mb-0">Импорт задач</h2>
+    <a class="btn btn-outline-secondary" href="/admin/tasks">← К задачам</a>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger mt-3">{{ error }}</div>
+  {% endif %}
+
+  <div class="alert alert-info mt-3">
+    Поддерживаются файлы <b>.csv</b> и <b>.json</b>.
+    <div class="mt-2">
+      <div class="fw-semibold">CSV заголовки:</div>
+      <code>id,title,prompt,answer,kind,is_active,topic,difficulty</code>
+    </div>
+  </div>
+
+  <form class="mt-3" method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+      <label class="form-label">Файл</label>
+      <input class="form-control" type="file" name="file" required>
+    </div>
+
+    <button class="btn btn-success" type="submit">Импортировать</button>
+  </form>
+
+  <hr class="mt-4">
+
+  <div class="mb-2 fw-semibold">Пример CSV:</div>
+  <pre class="bg-light p-3 rounded border" style="white-space: pre-wrap;">id,title,prompt,answer,kind,is_active,topic,difficulty
+,Сложение,17+25?,42,number,1,Арифметика,1
+,Строка,Напиши слово "кот",кот,text,1,Строки,1</pre>
+
+  <div class="mb-2 fw-semibold">Пример JSON:</div>
+  <pre class="bg-light p-3 rounded border" style="white-space: pre-wrap;">[
+  {"title":"Сложение","prompt":"17+25?","answer":"42","kind":"number","is_active":true,"topic":"Арифметика","difficulty":1}
+]</pre>
+</div>
+{% endblock %}

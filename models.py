@@ -13,6 +13,8 @@ class AuthUser(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     last_login_at = db.Column(db.DateTime, nullable=True)
+    is_admin = db.Column(db.Boolean, nullable=False, default=False)
+
 
 
 class Match(db.Model):
@@ -26,7 +28,6 @@ class Match(db.Model):
     player1_name = db.Column(db.String(32), nullable=False)
     player2_name = db.Column(db.String(32), nullable=False)
 
-    # Снимок рейтингов на старте (для прозрачности)
     player1_rating = db.Column(db.Integer, nullable=False)
     player2_rating = db.Column(db.Integer, nullable=False)
 
@@ -34,7 +35,28 @@ class Match(db.Model):
     started_at = db.Column(db.DateTime, nullable=True)
     ended_at = db.Column(db.DateTime, nullable=True)
 
-    winner_user_id = db.Column(db.Integer, nullable=True)  # null = ничья/время
-    reason = db.Column(db.String(32), nullable=True)       # solve/time/surrender/disconnect
+    winner_user_id = db.Column(db.Integer, nullable=True)
+    reason = db.Column(db.String(32), nullable=True)
 
-    status = db.Column(db.String(16), nullable=False, default="pending")  # pending|started|ended
+    status = db.Column(db.String(16), nullable=False, default="pending")
+
+    from datetime import datetime
+
+
+class Task(db.Model):
+    __tablename__ = "task"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    prompt = db.Column(db.Text, nullable=False)
+    answer = db.Column(db.String(200), nullable=False)
+
+    kind = db.Column(db.String(20), nullable=False, default="text")
+
+    topic = db.Column(db.String(64), nullable=False, default="Общее")
+    difficulty = db.Column(db.String(64), nullable=False, default="Средняя")
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

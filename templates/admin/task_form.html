@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between">
+    <h2 class="mb-0">
+      {% if task %}Редактирование задачи #{{ task.id }}{% else %}Новая задача{% endif %}
+    </h2>
+    <a class="btn btn-outline-secondary" href="/admin/tasks">← К списку</a>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger mt-3">{{ error }}</div>
+  {% endif %}
+
+  <form class="mt-3" method="post">
+    <div class="mb-3">
+      <label class="form-label">Условие (prompt)</label>
+      <textarea class="form-control" name="prompt" rows="6" required>{{ task.prompt if task else '' }}</textarea>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Правильный ответ (answer)</label>
+      <input class="form-control" name="answer" value="{{ task.answer if task else '' }}" required>
+      <div class="form-text">Сейчас проверка простая: сравнение строк после trim/lower (и ,→.).</div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Тип (kind)</label>
+        <select class="form-select" name="kind">
+          {% set k = (task.kind if task else 'text') %}
+          <option value="text" {% if k=='text' %}selected{% endif %}>text</option>
+          <option value="number" {% if k=='number' %}selected{% endif %}>number</option>
+        </select>
+      </div>
+
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Тема (topic)</label>
+        <input class="form-control" name="topic" value="{{ task.topic if task else 'Общее' }}">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Сложность</label>
+        {% set d = task.difficulty if task else 'medium' %}
+        <select class="form-select" name="difficulty">
+            <option value="easy" {% if d=='easy' %}selected{% endif %}>Лёгкая</option>
+            <option value="medium" {% if d=='medium' %}selected{% endif %}>Средняя</option>
+            <option value="hard" {% if d=='hard' %}selected{% endif %}>Сложная</option>
+        </select>
+    </div>
+
+    <div class="form-check mb-3">
+      {% set active = (task.is_active if task else True) %}
+      <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if active %}checked{% endif %}>
+      <label class="form-check-label" for="is_active">Активна (is_active)</label>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary" type="submit">Сохранить</button>
+      <a class="btn btn-outline-secondary" href="/admin/tasks">Отмена</a>
+    </div>
+  </form>
+
+  <hr class="mt-4">
+
+  <div class="text-muted small">
+    Если у тебя ещё нет полей <code>topic</code> и <code>difficulty</code> в БД — добавь их (ALTER TABLE или пересоздай базу),
+    иначе при сохранении будет ошибка.
+  </div>
+</div>
+{% endblock %}
