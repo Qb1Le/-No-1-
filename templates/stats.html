@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">Моя статистика</h3>
+    <a href="/" class="btn btn-outline-secondary">← На главную</a>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-body text-center">
+          <div class="text-muted">Рейтинг</div>
+          <div class="fs-3 fw-bold">{{ user.rating }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h6 class="mb-3">PvP-матчи</h6>
+          <div class="row text-center">
+            <div class="col">
+              <div class="text-muted">Всего</div>
+              <div class="fw-semibold">{{ total }}</div>
+            </div>
+            <div class="col">
+              <div class="text-muted">Победы</div>
+              <div class="fw-semibold text-success">{{ wins }}</div>
+            </div>
+            <div class="col">
+              <div class="text-muted">Поражения</div>
+              <div class="fw-semibold text-danger">{{ losses }}</div>
+            </div>
+            <div class="col">
+              <div class="text-muted">Ничьи</div>
+              <div class="fw-semibold">{{ draws }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-secondary mt-4">
+    📌 Статистика по тренировкам будет расширена в следующих версиях.
+  </div>
+</div>
+
+{% endblock %}

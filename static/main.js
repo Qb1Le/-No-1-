@@ -46,15 +46,18 @@ function fillSelect(sel, items, selectedValue) {
 
 (function boot() {
   if (!window.PAGE) return;
+
   if (typeof io === "undefined") {
     alert("Socket.IO client не найден. Проверь подключение socket.io.min.js в base.html");
     return;
   }
 
   const socket = io({ transports: ["websocket"] });
-
   socket.on("toast", (p) => showToast(p.type || "secondary", p.text || ""));
 
+  // =========================
+  // INDEX (matchmaking)
+  // =========================
   if (PAGE.kind === "index") {
     const btnFind = qs("btnFind");
     const btnCancel = qs("btnCancel");
@@ -102,6 +105,9 @@ function fillSelect(sel, items, selectedValue) {
     });
   }
 
+  // =========================
+  // MATCH (PvP)
+  // =========================
   if (PAGE.kind === "match") {
     const timerEl = qs("timer");
     const titleEl = qs("taskTitle");
@@ -110,16 +116,11 @@ function fillSelect(sel, items, selectedValue) {
     const btnSubmit = qs("btnSubmit");
     const btnSurrender = qs("btnSurrender");
     const resultEl = qs("result");
-    const logEl = qs("log");
-
-    function log(line) {
-      if (!logEl) return;
-      logEl.textContent = (logEl.textContent ? logEl.textContent + "\n" : "") + line;
-    }
 
     socket.emit("match:join", { match_id: PAGE.matchId });
 
     socket.on("match:task", (t) => {
+      // сервер шлёт topic/difficulty/prompt
       const topic = t.topic || "Задача";
       const diff = t.difficulty ? ` • ${t.difficulty}` : "";
       if (titleEl) titleEl.textContent = topic + diff;
@@ -128,21 +129,15 @@ function fillSelect(sel, items, selectedValue) {
 
     socket.on("match:state", (st) => {
       if (timerEl) timerEl.textContent = fmtTime(st.seconds_left);
-      log(`state: running=${st.running} left=${st.seconds_left}s`);
     });
 
     socket.on("match:started", (p) => {
       if (timerEl) timerEl.textContent = fmtTime(p.seconds_left);
       showToast("primary", "Матч начался!");
-      log("match started");
     });
 
     socket.on("match:tick", (p) => {
       if (timerEl) timerEl.textContent = fmtTime(p.seconds_left);
-    });
-
-    socket.on("match:submitted", (p) => {
-      log(`submitted user_id=${p.user_id}`);
     });
 
     btnSubmit?.addEventListener("click", () => {
@@ -162,7 +157,6 @@ function fillSelect(sel, items, selectedValue) {
 
     socket.on("match:ended", (p) => {
       const winnerId = p.winner_user_id;
-      const reason = p.reason;
 
       const p1ok = p.p1_correct ? "✅" : "❌";
       const p2ok = p.p2_correct ? "✅" : "❌";
@@ -192,10 +186,12 @@ function fillSelect(sel, items, selectedValue) {
       if (btnSurrender) btnSurrender.disabled = true;
 
       showToast("secondary", "Матч завершён");
-      log(`ended: winner=${winnerId} reason=${reason}`);
     });
   }
 
+  // =========================
+  // TRAINING (PvE) + filters
+  // =========================
   if (PAGE.kind === "training") {
     const timerEl = qs("timer");
     const titleEl = qs("taskTitle");
@@ -212,6 +208,7 @@ function fillSelect(sel, items, selectedValue) {
 
     let suppressFilterEmit = false;
 
+    // Заголовок БЕЗ предмета (чтобы не было "Информатика ...")
     function setHeader(_subject, topic, diff) {
       if (!titleEl) return;
       const t = topic || "Тренировка";
@@ -244,6 +241,7 @@ function fillSelect(sel, items, selectedValue) {
       });
     }
 
+    // join
     socket.emit("training:join", {});
 
     socket.on("training:options", (opt) => {
@@ -261,6 +259,7 @@ function fillSelect(sel, items, selectedValue) {
     });
 
     socket.on("training:task", (t) => {
+      // синхронизируем селекты с сервером (без лишних эмитов)
       const filters = t.filters || null;
       if (filters) {
         suppressFilterEmit = true;

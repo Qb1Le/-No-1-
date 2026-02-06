@@ -1238,6 +1238,45 @@ def on_disconnect():
     remove_from_queue_by_sid(request.sid)
 
 
+@app.route("/stats")
+@login_required
+def user_stats():
+    uid = session["user_id"]
+    user = db.session.get(AuthUser, uid)
+    if not user:
+        abort(404)
+
+    total = (
+        Match.query
+        .filter(Match.status == "ended")
+        .filter((Match.player1_id == uid) | (Match.player2_id == uid))
+        .count()
+    )
+
+    wins = Match.query.filter(
+        Match.status == "ended",
+        Match.winner_user_id == uid
+    ).count()
+
+    draws = (
+        Match.query
+        .filter(Match.status == "ended", Match.winner_user_id.is_(None))
+        .filter((Match.player1_id == uid) | (Match.player2_id == uid))
+        .count()
+    )
+
+    losses = max(0, total - wins - draws)
+
+    return render_template(
+        "stats.html",
+        user=user,
+        total=total,
+        wins=wins,
+        losses=losses,
+        draws=draws,
+    )
+
+
 # ----------------------------
 if __name__ == "__main__":
     ensure_db()
